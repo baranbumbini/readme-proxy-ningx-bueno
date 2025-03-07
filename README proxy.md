@@ -265,3 +265,74 @@ Host: w1.example.test
 ```
 
 ---
+```
+Vagrant.configure("2") do |config|
+  config.vm.box = "debian/bullseye64"
+
+  config.vm.provider "virtualbox" do |vb|
+    vb.memory = "256"
+  end
+
+Configuración del servidor Proxy
+  config.vm.define "proxy" do |proxy|
+    proxy.vm.hostname = "www.example.test"
+    proxy.vm.network "private_network", ip: "192.168.57.10"
+
+    proxy.vm.provision "shell", inline: <<-SHELL
+      apt-get update && apt-get install -y nginx
+      echo "192.168.57.11 w1" >> /etc/hosts
+      cat > /etc/nginx/sites-available/default <<EOL
+server {
+    listen 80;
+    listen [::]:80;
+    server_name example.test www.example.test;
+    location / {
+        proxy_pass http://192.168.57.11:8080/;
+        add_header X-friend "Alberto Avidad Reyes";
+    }
+}
+EOL
+      systemctl restart nginx
+    SHELL
+  end
+
+Configuración del servidor Web (w1)
+  config.vm.define "web" do |web|
+    web.vm.hostname = "w1.example.test"
+    web.vm.network "private_network", ip: "192.168.57.11"
+
+    web.vm.provision "shell", inline: <<-SHELL
+      apt-get update && apt-get install -y nginx
+      cat > /etc/nginx/sites-available/default <<EOL
+server {
+    listen 8080;
+    listen [::]:8080;
+    server_name w1;
+    root /var/www/html;
+    index index.html index.htm;
+    location / {
+        add_header Host w1.example.test;
+        try_files $uri $uri/ =404;
+    }
+}
+EOL
+      systemctl restart nginx
+      mkdir -p /var/www/html
+      cat > /var/www/html/index.html <<EOL
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>example.test</title>
+</head>
+<body>
+    <h1>example.test</h1>
+    <h2>Bienvenido</h2>
+    <p>Servidor w1</p>
+</body>
+</html>
+EOL
+    SHELL
+  end
+end
+```
